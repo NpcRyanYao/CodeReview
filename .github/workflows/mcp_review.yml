@@ -17,8 +17,11 @@ jobs:
           echo "DIFF=$(git diff origin/main...HEAD)" >> $GITHUB_ENV
 
       - name: Run MCP Review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python scripts/mcp_review.py \
-            --files "$FILES" \
-            --diff "$DIFF" \
+            --files "${{ env.FILES }}" \
+            --diff "${{ env.DIFF }}" \
             --pr ${{ github.event.pull_request.number }}
