@@ -1,0 +1,24 @@
+name: MCP Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+
+      - name: Collect PR context
+        run: |
+          echo "FILES=$(git diff --name-only origin/main...HEAD)" >> $GITHUB_ENV
+          echo "DIFF=$(git diff origin/main...HEAD)" >> $GITHUB_ENV
+
+      - name: Run MCP Review
+        run: |
+          python scripts/mcp_review.py \
+            --files "$FILES" \
+            --diff "$DIFF" \
+            --pr ${{ github.event.pull_request.number }}
