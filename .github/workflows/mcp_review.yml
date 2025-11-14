@@ -4,21 +4,38 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: write
+  pull-requests: write   # 允许脚本读取和评论 PR
+
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0   # 拉取完整历史，确保可以 diff 基准分支
 
       - name: Collect PR context
         run: |
-          echo "FILES=$(git diff --name-only origin/main...HEAD)" >> $GITHUB_ENV
-          echo "DIFF=$(git diff origin/main...HEAD)" >> $GITHUB_ENV
+          # 将文件列表压缩成一行，避免多行环境变量报错
+          echo "FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | tr '\n' ' ')" >> $GITHUB_ENV
+          # 保存 diff 内容到文件，避免超长字符串报错
+          git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > diff.txt
+          echo "DIFF_FILE=diff.txt" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run MCP Review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python scripts/mcp_review.py \
-            --files "$FILES" \
-            --diff "$DIFF" \
+            --files "${{ env.FILES }}" \
+            --diff "$(cat ${{ env.DIFF_FILE }})" \
             --pr ${{ github.event.pull_request.number }}
