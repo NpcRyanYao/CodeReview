@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: write
+  pull-requests: write   # 允许脚本读取和评论 PR
+
 jobs:
   review:
     runs-on: ubuntu-latest
