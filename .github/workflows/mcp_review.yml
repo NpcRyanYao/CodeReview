@@ -15,7 +15,9 @@ jobs:
 
       - name: Collect PR context
         run: |
-          echo "FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})" >> $GITHUB_ENV
+          # 将文件列表压缩成一行，避免多行环境变量报错
+          echo "FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | tr '\n' ' ')" >> $GITHUB_ENV
+          # 保存 diff 内容到文件，避免超长字符串报错
           git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > diff.txt
           echo "DIFF_FILE=diff.txt" >> $GITHUB_ENV
 
