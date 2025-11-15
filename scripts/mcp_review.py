@@ -6,11 +6,14 @@ Diff 获取：在 workflow 里实现了 git diff base...head，能收集修改�
 LSP 审评意见：如果你能调用 LSP 或静态分析工具（如 pylsp、eslint），就能补充安全/逻辑检查。
 结果反馈到 GitHub：你已经实现了 pr.create_issue_comment(...)，结果能自动出现在 PR 页面。
 """
-import sys
 import os
 import argparse
 from github import Github
 from client import Client
+import sys
+
+# 把项目根目录加入 sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def main():
