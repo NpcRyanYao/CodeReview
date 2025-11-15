@@ -2,7 +2,7 @@ name: MCP Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0   # 拉取完整历史，确保可以 diff 基准分支
 
@@ -24,6 +24,11 @@ jobs:
           # 保存 diff 内容到文件，避免超长字符串报错
           git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > diff.txt
           echo "DIFF_FILE=diff.txt" >> $GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -37,5 +42,6 @@ jobs:
         run: |
           python scripts/mcp_review.py \
             --files "${{ env.FILES }}" \
-            --diff "$(cat ${{ env.DIFF_FILE }})" \
+            --diff-file "${{ env.DIFF_FILE }}" \
+            --req requirements.md \
             --pr ${{ github.event.pull_request.number }}
