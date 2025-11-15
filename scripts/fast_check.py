@@ -17,10 +17,12 @@
 
 import sys
 import re
-from tree_sitter_languages import get_parser
+from tree_sitter import Parser
+from tree_sitter_languages import get_language
 
-# 获取 Python 语言解析器（已内置，无需构建 .so）
-parser = get_parser("python")
+LANGUAGE = get_language("python")
+parser = Parser()
+parser.set_language(LANGUAGE)
 
 
 def check_indentation(code: str):
@@ -47,7 +49,7 @@ def find_functions(node, code: str):
             # 只要是合法标识符就检查
             if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', func_name):
                 if not re.match(r'^[a-z_][a-z0-9_]*$', func_name):
-                    errors.append(f"函数名 '{func_name}' 不符合 snake_case 命名规范")
+                    errors.append(f"函数名'{func_name}' 不符合 snake_case 命名规范")
     for child in node.children:
         errors.extend(find_functions(child, code))
     return errors
@@ -81,4 +83,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python fast_check.py <python_file>")
         sys.exit(1)
-    run_checks(sys.argv[1])
+    file_path = sys.argv[1]
+    print(f"开始检查: {file_path}")
+    run_checks(file_path)
