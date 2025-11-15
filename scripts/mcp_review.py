@@ -59,6 +59,8 @@ def main():
     pr = repo.get_pull(int(args.pr))
     pr.create_review(body=f"🤖 MCP Review:\n\n{response}", event="COMMENT")
 
+    print("Test branch commit!!!!")
+
 
 if __name__ == "__main__":
     main()
