@@ -12,17 +12,25 @@ import argparse
 from github import Github
 from client import Client
 
-# 如果需要修改 sys.path，可以在 import 之后写
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 def main():
     # 参数解析
     parser = argparse.ArgumentParser()
     parser.add_argument("--files", required=True)
-    parser.add_argument("--diff", required=True)
+    parser.add_argument("--diff-file", required=True)
+    parser.add_argument("--req", required=False)
     parser.add_argument("--pr", required=True)
     args = parser.parse_args()
+
+    # 读取 diff 内容
+    with open(args.diff_file, "r", encoding="utf-8") as f:
+        diff_content = f.read()
+
+    # 读取需求文档（可选）
+    requirements = None
+    if args.req and os.path.exists(args.req):
+        with open(args.req, "r", encoding="utf-8") as f:
+            requirements = f.read()
 
     # 初始化 MCP 客户端
     client = Client()
@@ -30,7 +38,8 @@ def main():
     # 构建上下文
     context = {
         "files": args.files.split(),
-        "diff": args.diff,
+        "diff": diff_content,
+        "requirements": requirements,
         "pr_number": args.pr
     }
 
@@ -38,14 +47,14 @@ def main():
     response = client.query(
         model="code-review-llm",
         context=context,
-        prompt="请检查代码风格、潜在 bug，并给出改进建议"
+        prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议"
     )
 
-    # 将结果写入 GitHub 评论
+    # 将结果写入 GitHub PR Review
     gh = Github(os.getenv("GITHUB_TOKEN"))
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
-    pr.create_issue_comment(f"🤖 MCP Review:\n\n{response}")
+    pr.create_review(body=f"🤖 MCP Review:\n\n{response}", event="COMMENT")
 
 
 if __name__ == "__main__":
