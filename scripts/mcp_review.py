@@ -17,24 +17,19 @@ import subprocess
 from github import Github, Auth
 from client import Client
 
-
 def parse_diff_by_file(diff_text: str):
     """
     从统一的 diff 文本中按文件拆分，返回 {file_path: diff_body}
     兼容新增/删除文件，若没有 @@ hunk，就用整块内容降级。
     """
     files_to_diff = {}
-
-    # 按 diff --git 分块
     blocks = re.split(r'(?=^diff --git)', diff_text, flags=re.MULTILINE)
     for block in blocks:
         if not block.strip().startswith("diff --git"):
             continue
 
-        # 解析文件路径（以 b/ 为准）
         m = re.search(r'^\+\+\+ b/(.+)$', block, flags=re.MULTILINE)
         if not m:
-            # 有些场景是 /dev/null（删除文件），尝试从 --- a/ 提取
             m2 = re.search(r'^--- a/(.+)$', block, flags=re.MULTILINE)
             file_path = m2.group(1).strip() if m2 else None
         else:
@@ -43,24 +38,49 @@ def parse_diff_by_file(diff_text: str):
         if not file_path:
             continue
 
-        # 提取真正的 diff 内容（从第一个 @@ 开始）
         hunk = re.search(r'@@.*\n([\s\S]*)', block)
         diff_body = (hunk.group(1).strip() if hunk else block.strip())
-
         files_to_diff[file_path] = diff_body
 
     return files_to_diff
 
 
-def get_commit_message():
-    """获取最后一次提交的 message"""
+def get_commit_message(commit_hash=None):
+    """获取指定 commit 的 message，默认取最后一次"""
     try:
-        return subprocess.check_output(
-            ["git", "log", "-1", "--pretty=%B"],
-            text=True
-        ).strip()
+        cmd = ["git", "log", "-1", "--pretty=%B"]
+        if commit_hash:
+            cmd.append(commit_hash)
+        return subprocess.check_output(cmd, text=True).strip()
     except Exception:
         return ""
+
+
+def get_commits_in_range(base_sha, head_sha):
+    """获取 PR 范围内所有 commit 信息"""
+    commits = []
+    try:
+        output = subprocess.check_output(
+            ["git", "log", "--pretty=format:%H", f"{base_sha}..{head_sha}"],
+            text=True
+        )
+        hashes = output.strip().splitlines()
+        for h in hashes:
+            commits.append({
+                "hash": h,
+                "message": get_commit_message(h)
+            })
+    except Exception:
+        pass
+    return commits
+
+
+def extract_first_added_line_position(diff_body: str):
+    """解析 diff hunk，返回第一个新增行的 position，默认 1"""
+    m = re.search(r'@@ -\d+(?:,\d+)? \+(\d+)', diff_body)
+    if m:
+        return int(m.group(1))
+    return 1
 
 
 def main():
@@ -69,42 +89,42 @@ def main():
     parser.add_argument("--diff-file", required=True)
     parser.add_argument("--req", required=False)
     parser.add_argument("--pr", required=True)
+    parser.add_argument("--base-sha", required=False)  # 新增：传入 base commit
     args = parser.parse_args()
 
-    # 读取 diff 内容
     with open(args.diff_file, "r", encoding="utf-8") as f:
         full_diff = f.read()
 
-    # 读取需求文档
     requirements = None
     if args.req and os.path.exists(args.req):
         with open(args.req, "r", encoding="utf-8") as f:
             requirements = f.read()
 
     client = Client()
-
     changed_files = args.files.split()
     diff_map = parse_diff_by_file(full_diff)
 
-    # 构建整体上下文
+    # 收集 commit 信息（支持多个）
+    commits = []
+    if args.base_sha:
+        commits = get_commits_in_range(args.base_sha, os.getenv("GITHUB_SHA", ""))
+
     context = {
-        "files": changed_files,                # 改动的文件路径列表
-        "diff": full_diff,                     # 整个 PR 的完整 diff 内容
-        "diffs_by_file": diff_map,             # 按文件拆分后的 diff
-        "requirements": requirements,          # 需求文档内容
-        "pr_number": args.pr,                  # 当前 PR 编号
-        "root_path": os.path.abspath(os.getcwd()),  # 项目根路径
-        "commit": {                            # 当前提交信息
+        "files": changed_files,
+        "diff": full_diff,
+        "diffs_by_file": diff_map,
+        "requirements": requirements,
+        "pr_number": args.pr,
+        "root_path": os.path.abspath(os.getcwd()),
+        "commits": commits if commits else [{
             "hash": os.getenv("GITHUB_SHA", ""),
             "message": get_commit_message()
-        }
+        }]
     }
 
-    # 打印字典结构到日志
     print("📦 Context 字典结构:")
     print(json.dumps(context, indent=2, ensure_ascii=False))
 
-    # 整体评审结果
     overall = client.query(
         model="code-review-llm",
         context=context,
@@ -115,10 +135,8 @@ def main():
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
 
-    # 1️⃣ 保留 Conversation 评论
     pr.create_issue_comment(f"🤖 MCP Review（整体）:\n\n{overall}")
 
-    # 2️⃣ 分文件精确评审
     comments = []
     for file in changed_files:
         file_diff = diff_map.get(file, "")
@@ -136,9 +154,10 @@ def main():
             prompt=f"请基于该文件的 diff 片段进行精确评审，指出问题和改进建议：{file}"
         )
 
+        position = extract_first_added_line_position(file_diff)
         comments.append({
             "path": file,
-            "position": 1,  # 简单挂在文件开头
+            "position": position,
             "body": f"🤖 文件评审：{file}\n\n{file_review}"
         })
 
