@@ -1,29 +1,35 @@
-name: CI
+name: CI  # 工作流名称，显示在 GitHub Actions UI 中
 
 on:
-  pull_request:   # 每次 PR 都会触发
-  push:           # 或者 push 时也触发
+  pull_request:   # 当发生 pull request 事件时触发（包括打开、同步、重新打开等）
+  push:           # 当发生 push 到任意分支时也触发
 
 jobs:
-  lint-and-check:
-    runs-on: ubuntu-latest
+  lint-and-check:            # Job 名称
+    runs-on: ubuntu-latest   # 在 GitHub 托管的 ubuntu-latest runner 上运行（隔离虚拟环境）
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        # 检出仓库代码到 runner 工作目录（默认路径是 $GITHUB_WORKSPACE）
+        # 注意：如果需要完整历史用于比较，请加 with: fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
+        # 安装并切换到指定版本的 Python，后续步骤可以直接使用 python / pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+        # 升级 pip 并按 requirements.txt 安装项目依赖
+        # 建议：为加速与减少网络不稳定影响，可使用 pip cache 或 actions/cache 缓存 pip 包
 
       - name: Run fast_check
         run: |
           for f in $(find . -name "*.py"); do
             python scripts/fast_check.py "$f"
           done
+        # 遍历仓库中所有 .py 文件并对每个文件调用 scripts/fast_check.py

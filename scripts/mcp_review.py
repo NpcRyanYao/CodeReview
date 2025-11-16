@@ -16,8 +16,8 @@ import argparse
 from github import Github
 from client import Client
 
+
 def main():
-    # 参数解析
     parser = argparse.ArgumentParser()
     parser.add_argument("--files", required=True)
     parser.add_argument("--diff-file", required=True)
@@ -29,13 +29,15 @@ def main():
     with open(args.diff_file, "r", encoding="utf-8") as f:
         diff_content = f.read()
 
-    # 读取需求文档（可选）
+    # 读取需求文档
+    # 通过 --req requirements.md 参数，把需求文档传入。
+    # 脚本会读取文档内容，并放进 context["requirements"]。
+    # 然后在调用 LLM 时，文档内容会作为上下文一起传入。
     requirements = None
     if args.req and os.path.exists(args.req):
         with open(args.req, "r", encoding="utf-8") as f:
             requirements = f.read()
 
-    # 初始化 MCP 客户端
     client = Client()
 
     # 构建上下文
@@ -46,20 +48,43 @@ def main():
         "pr_number": args.pr
     }
 
-    # 调用模型
+    # 整体评审结果
     response = client.query(
         model="code-review-llm",
         context=context,
         prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议"
     )
 
-    # 将结果写入 GitHub PR Review
     gh = Github(os.getenv("GITHUB_TOKEN"))
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
-    pr.create_review(body=f"🤖 MCP Review:\n\n{response}", event="COMMENT")
 
-    print("Test branch commit!!!!")
+    # 1️⃣ 保留 Conversation 评论
+    pr.create_issue_comment(f"🤖 MCP Review:\n\n{response}")
+
+    # 2️⃣ 分文件精确评审
+    comments = []
+    for file in context["files"]:
+        file_review = client.query(
+            model="code-review-llm",
+            context={"file": file, "requirements": requirements},
+            prompt=f"请针对文件 {file} 的改动进行精确评审，指出问题和改进建议"
+        )
+        # 注意：position 是 diff 中的行号，这里简单挂在文件开头
+        comments.append({
+            "path": file,
+            "position": 1,
+            "body": f"🤖 文件 {file} 评审:\n{file_review}"
+        })
+
+    if comments:
+        pr.create_review(
+            body="🤖 分文件精确评审结果",
+            event="COMMENT",
+            comments=comments
+        )
+
+    print("✅ 已写回 Conversation 评论和分文件评审")
 
 
 if __name__ == "__main__":
