@@ -83,6 +83,29 @@ def extract_first_added_line_position(diff_body: str):
     return 1
 
 
+def get_commits_in_range(base_sha, head_sha):
+    """获取 PR 范围内所有 commit 信息"""
+    commits = []
+    try:
+        output = subprocess.check_output(
+            ["git", "log", "--pretty=format:%H", f"{base_sha}..{head_sha}"],
+            text=True
+        )
+        hashes = output.strip().splitlines()
+        for h in hashes:
+            message = subprocess.check_output(
+                ["git", "log", "-1", "--pretty=%B", h],
+                text=True
+            ).strip()
+            commits.append({
+                "hash": h,
+                "message": message
+            })
+    except Exception:
+        pass
+    return commits
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--files", required=True)
@@ -107,7 +130,8 @@ def main():
     # 收集 commit 信息（支持多个）
     commits = []
     if args.base_sha:
-        commits = get_commits_in_range(args.base_sha, os.getenv("GITHUB_SHA", ""))
+        commits = get_commits_in_range(args.base_sha, os.getenv(
+            "GITHUB_SHA", ""))
 
     context = {
         "files": changed_files,

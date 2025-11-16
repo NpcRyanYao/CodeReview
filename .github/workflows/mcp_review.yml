@@ -43,13 +43,14 @@ jobs:
 
       - name: Run MCP Review
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 自动注入的 token，用于在 PR 上回写注释或创建 Check Run
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 自动注入的 token，用于在 PR 上回写注释或创建 Check Run
           GITHUB_REPOSITORY: ${{ github.repository }} # 仓库标识（owner/repo）
         run: |
-          # 调用项目内的评审脚本，向其传入改动文件列表、diff 文件路径、业务需求文件和 PR 编号
-          # scripts/mcp_review.py 应解析 --files 中的空格分隔路径并读取 --diff-file 的内容
+          # 调用项目内的评审脚本，向其传入改动文件列表、diff 文件路径、业务需求文件、PR 编号和 base commit
           python scripts/mcp_review.py \
             --files "${{ env.FILES }}" \
             --diff-file "${{ env.DIFF_FILE }}" \
             --req requirements.md \
-            --pr ${{ github.event.pull_request.number }}
+            --pr ${{ github.event.pull_request.number }} \
+            --base-sha ${{ github.event.pull_request.base.sha }}
+     
