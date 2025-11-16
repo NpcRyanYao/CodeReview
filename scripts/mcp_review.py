@@ -15,8 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import argparse
 from github import Github
 from client import Client
-import json
 import re
+import json
 # 如需消除 DeprecationWarning，可改用：
 # from github import Github, Auth
 # gh = Github(auth=Auth.Token(os.getenv("GITHUB_TOKEN")))
@@ -88,6 +88,10 @@ def main():
         "root_path": os.path.abspath(os.getcwd())
     }
 
+    # 打印字典结构到日志
+    print("📦 Context 字典结构:")
+    print(json.dumps(context, indent=2, ensure_ascii=False))
+
     # 整体评审结果（保留）
     overall = client.query(
         model="code-review-llm",
@@ -107,11 +111,11 @@ def main():
     for file in changed_files:
         file_diff = diff_map.get(file, "")
         file_ctx = {
-            "files": [file],               # 如果你的 Client 只识别 'files'
-            # "file": file,                 # 如需兼容两种键，可让 Client 使用 context.get(...)
+            "files": [file],  # 如果 Client 只识别 'files'
+            "file": file,  # 可兼容两种键
             "diff": file_diff,
             "requirements": requirements,
-            "pr_number": args.pr
+            "pr_number": args.pr,
         }
 
         file_review = client.query(
@@ -135,6 +139,7 @@ def main():
         )
 
     print("✅ 已写回整体评论与分文件评审")
+
 
 if __name__ == "__main__":
     main()
