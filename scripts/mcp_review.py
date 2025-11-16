@@ -8,18 +8,14 @@ LSP 审评意见：如果你能调用 LSP 或静态分析工具（如 pylsp、es
 """
 import sys
 import os
-
 # 把项目根目录加入 sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import argparse
-from github import Github
-from client import Client
 import re
 import json
-# 如需消除 DeprecationWarning，可改用：
-# from github import Github, Auth
-# gh = Github(auth=Auth.Token(os.getenv("GITHUB_TOKEN")))
+import subprocess
+from github import Github, Auth
+from client import Client
 
 
 def parse_diff_by_file(diff_text: str):
@@ -55,6 +51,18 @@ def parse_diff_by_file(diff_text: str):
 
     return files_to_diff
 
+
+def get_commit_message():
+    """获取最后一次提交的 message"""
+    try:
+        return subprocess.check_output(
+            ["git", "log", "-1", "--pretty=%B"],
+            text=True
+        ).strip()
+    except Exception:
+        return ""
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--files", required=True)
@@ -80,39 +88,43 @@ def main():
 
     # 构建整体上下文
     context = {
-        "files": changed_files,
-        "diff": full_diff,
-        "diffs_by_file": diff_map,   # 新增：按文件拆分后的 diff
-        "requirements": requirements,
-        "pr_number": args.pr,
-        "root_path": os.path.abspath(os.getcwd())
+        "files": changed_files,                # 改动的文件路径列表
+        "diff": full_diff,                     # 整个 PR 的完整 diff 内容
+        "diffs_by_file": diff_map,             # 按文件拆分后的 diff
+        "requirements": requirements,          # 需求文档内容
+        "pr_number": args.pr,                  # 当前 PR 编号
+        "root_path": os.path.abspath(os.getcwd()),  # 项目根路径
+        "commit": {                            # 当前提交信息
+            "hash": os.getenv("GITHUB_SHA", ""),
+            "message": get_commit_message()
+        }
     }
 
     # 打印字典结构到日志
     print("📦 Context 字典结构:")
     print(json.dumps(context, indent=2, ensure_ascii=False))
 
-    # 整体评审结果（保留）
+    # 整体评审结果
     overall = client.query(
         model="code-review-llm",
         context=context,
         prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议。必要时引用具体 diff 片段。"
     )
 
-    gh = Github(os.getenv("GITHUB_TOKEN"))
+    gh = Github(auth=Auth.Token(os.getenv("GITHUB_TOKEN")))
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
 
     # 1️⃣ 保留 Conversation 评论
     pr.create_issue_comment(f"🤖 MCP Review（整体）:\n\n{overall}")
 
-    # 2️⃣ 分文件精确评审（保留并增强：传入每个文件的 diff 片段）
+    # 2️⃣ 分文件精确评审
     comments = []
     for file in changed_files:
         file_diff = diff_map.get(file, "")
         file_ctx = {
-            "files": [file],  # 如果 Client 只识别 'files'
-            "file": file,  # 可兼容两种键
+            "files": [file],
+            "file": file,
             "diff": file_diff,
             "requirements": requirements,
             "pr_number": args.pr,
@@ -124,10 +136,9 @@ def main():
             prompt=f"请基于该文件的 diff 片段进行精确评审，指出问题和改进建议：{file}"
         )
 
-        # 简单挂在文件开头；如需定位具体行，可解析 @@ hunk 获取 position
         comments.append({
             "path": file,
-            "position": 1,
+            "position": 1,  # 简单挂在文件开头
             "body": f"🤖 文件评审：{file}\n\n{file_review}"
         })
 
