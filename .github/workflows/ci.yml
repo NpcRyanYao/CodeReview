@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
         # 安装并切换到指定版本的 Python，后续步骤可以直接使用 python / pip
 
       - name: Install dependencies
