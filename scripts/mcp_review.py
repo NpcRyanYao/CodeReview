@@ -16,35 +16,44 @@ import argparse
 from github import Github
 from client import Client
 import json
+import re
+# 如需消除 DeprecationWarning，可改用：
+# from github import Github, Auth
+# gh = Github(auth=Auth.Token(os.getenv("GITHUB_TOKEN")))
 
 
-def parse_diff_file(diff_file_path):
-    """按文件拆分 diff 内容，返回 {file_path: diff_content}"""
-    if not os.path.exists(diff_file_path):
-        return {}
-    with open(diff_file_path, "r", encoding="utf-8") as f:
-        diff_content = f.read()
+def parse_diff_by_file(diff_text: str):
+    """
+    从统一的 diff 文本中按文件拆分，返回 {file_path: diff_body}
+    兼容新增/删除文件，若没有 @@ hunk，就用整块内容降级。
+    """
+    files_to_diff = {}
 
-    diff_blocks = diff_content.split("diff --git")
-    diff_dict = {}
-    for block in diff_blocks:
-        if not block.strip():
+    # 按 diff --git 分块
+    blocks = re.split(r'(?=^diff --git)', diff_text, flags=re.MULTILINE)
+    for block in blocks:
+        if not block.strip().startswith("diff --git"):
             continue
-        # 提取文件路径
-        lines = block.splitlines()
-        file_path = None
-        for line in lines:
-            if line.startswith("--- a/") or line.startswith("+++ b/"):
-                if line.startswith("+++ b/"):
-                    file_path = line.replace("+++ b/", "").strip()
-                    break
+
+        # 解析文件路径（以 b/ 为准）
+        m = re.search(r'^\+\+\+ b/(.+)$', block, flags=re.MULTILINE)
+        if not m:
+            # 有些场景是 /dev/null（删除文件），尝试从 --- a/ 提取
+            m2 = re.search(r'^--- a/(.+)$', block, flags=re.MULTILINE)
+            file_path = m2.group(1).strip() if m2 else None
+        else:
+            file_path = m.group(1).strip()
+
         if not file_path:
             continue
-        # 提取 diff 内容（去掉头部）
-        diff_body = "\n".join(lines[1:])
-        diff_dict[file_path] = diff_body
-    return diff_dict
 
+        # 提取真正的 diff 内容（从第一个 @@ 开始）
+        hunk = re.search(r'@@.*\n([\s\S]*)', block)
+        diff_body = (hunk.group(1).strip() if hunk else block.strip())
+
+        files_to_diff[file_path] = diff_body
+
+    return files_to_diff
 
 def main():
     parser = argparse.ArgumentParser()
@@ -54,42 +63,78 @@ def main():
     parser.add_argument("--pr", required=True)
     args = parser.parse_args()
 
+    # 读取 diff 内容
+    with open(args.diff_file, "r", encoding="utf-8") as f:
+        full_diff = f.read()
+
     # 读取需求文档
     requirements = None
     if args.req and os.path.exists(args.req):
         with open(args.req, "r", encoding="utf-8") as f:
             requirements = f.read()
 
-    # 构建字典结构
-    commit_info_dict = {
-        "root_path": os.path.abspath(os.getcwd()),
-        "commit": {
-            "hash": os.getenv("GITHUB_SHA", ""),   # CI 环境里有当前 commit SHA
-            "message": os.getenv("COMMIT_MESSAGE", "")  # 可以在 workflow 里提前写入
-        },
-        "diffs": parse_diff_file(args.diff_file),
-        "files": args.files.split(),
+    client = Client()
+
+    changed_files = args.files.split()
+    diff_map = parse_diff_by_file(full_diff)
+
+    # 构建整体上下文
+    context = {
+        "files": changed_files,
+        "diff": full_diff,
+        "diffs_by_file": diff_map,   # 新增：按文件拆分后的 diff
         "requirements": requirements,
-        "pr_number": args.pr
+        "pr_number": args.pr,
+        "root_path": os.path.abspath(os.getcwd())
     }
 
-    # 打印 JSON，方便在 CI 日志里查看
-    print(json.dumps(commit_info_dict, indent=2, ensure_ascii=False))
-
-    # 调用 LLM 做评审
-    client = Client()
-    response = client.query(
+    # 整体评审结果（保留）
+    overall = client.query(
         model="code-review-llm",
-        context=commit_info_dict,
-        prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议"
+        context=context,
+        prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议。必要时引用具体 diff 片段。"
     )
 
     gh = Github(os.getenv("GITHUB_TOKEN"))
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
 
-    pr.create_issue_comment(f"🤖 MCP Review:\n\n{response}")
+    # 1️⃣ 保留 Conversation 评论
+    pr.create_issue_comment(f"🤖 MCP Review（整体）:\n\n{overall}")
 
+    # 2️⃣ 分文件精确评审（保留并增强：传入每个文件的 diff 片段）
+    comments = []
+    for file in changed_files:
+        file_diff = diff_map.get(file, "")
+        file_ctx = {
+            "files": [file],               # 如果你的 Client 只识别 'files'
+            # "file": file,                 # 如需兼容两种键，可让 Client 使用 context.get(...)
+            "diff": file_diff,
+            "requirements": requirements,
+            "pr_number": args.pr
+        }
+
+        file_review = client.query(
+            model="code-review-llm",
+            context=file_ctx,
+            prompt=f"请基于该文件的 diff 片段进行精确评审，指出问题和改进建议：{file}"
+        )
+
+        # 简单挂在文件开头；如需定位具体行，可解析 @@ hunk 获取 position
+        comments.append({
+            "path": file,
+            "position": 1,
+            "body": f"🤖 文件评审：{file}\n\n{file_review}"
+        })
+
+    if comments:
+        pr.create_review(
+            body="🤖 分文件精确评审结果",
+            event="COMMENT",
+            comments=comments
+        )
+
+    print("✅ 已写回整体评论与分文件评审")
 
 if __name__ == "__main__":
     main()
