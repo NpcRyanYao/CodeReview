@@ -15,6 +15,35 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import argparse
 from github import Github
 from client import Client
+import json
+
+
+def parse_diff_file(diff_file_path):
+    """按文件拆分 diff 内容，返回 {file_path: diff_content}"""
+    if not os.path.exists(diff_file_path):
+        return {}
+    with open(diff_file_path, "r", encoding="utf-8") as f:
+        diff_content = f.read()
+
+    diff_blocks = diff_content.split("diff --git")
+    diff_dict = {}
+    for block in diff_blocks:
+        if not block.strip():
+            continue
+        # 提取文件路径
+        lines = block.splitlines()
+        file_path = None
+        for line in lines:
+            if line.startswith("--- a/") or line.startswith("+++ b/"):
+                if line.startswith("+++ b/"):
+                    file_path = line.replace("+++ b/", "").strip()
+                    break
+        if not file_path:
+            continue
+        # 提取 diff 内容（去掉头部）
+        diff_body = "\n".join(lines[1:])
+        diff_dict[file_path] = diff_body
+    return diff_dict
 
 
 def main():
@@ -25,33 +54,33 @@ def main():
     parser.add_argument("--pr", required=True)
     args = parser.parse_args()
 
-    # 读取 diff 内容
-    with open(args.diff_file, "r", encoding="utf-8") as f:
-        diff_content = f.read()
-
     # 读取需求文档
-    # 通过 --req requirements.md 参数，把需求文档传入。
-    # 脚本会读取文档内容，并放进 context["requirements"]。
-    # 然后在调用 LLM 时，文档内容会作为上下文一起传入。
     requirements = None
     if args.req and os.path.exists(args.req):
         with open(args.req, "r", encoding="utf-8") as f:
             requirements = f.read()
 
-    client = Client()
-
-    # 构建上下文
-    context = {
+    # 构建字典结构
+    commit_info_dict = {
+        "root_path": os.path.abspath(os.getcwd()),
+        "commit": {
+            "hash": os.getenv("GITHUB_SHA", ""),   # CI 环境里有当前 commit SHA
+            "message": os.getenv("COMMIT_MESSAGE", "")  # 可以在 workflow 里提前写入
+        },
+        "diffs": parse_diff_file(args.diff_file),
         "files": args.files.split(),
-        "diff": diff_content,
         "requirements": requirements,
         "pr_number": args.pr
     }
 
-    # 整体评审结果
+    # 打印 JSON，方便在 CI 日志里查看
+    print(json.dumps(commit_info_dict, indent=2, ensure_ascii=False))
+
+    # 调用 LLM 做评审
+    client = Client()
     response = client.query(
         model="code-review-llm",
-        context=context,
+        context=commit_info_dict,
         prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议"
     )
 
@@ -59,32 +88,7 @@ def main():
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
 
-    # 1️⃣ 保留 Conversation 评论
     pr.create_issue_comment(f"🤖 MCP Review:\n\n{response}")
-
-    # 2️⃣ 分文件精确评审
-    comments = []
-    for file in context["files"]:
-        file_review = client.query(
-            model="code-review-llm",
-            context={"file": file, "requirements": requirements},
-            prompt=f"请针对文件 {file} 的改动进行精确评审，指出问题和改进建议"
-        )
-        # 注意：position 是 diff 中的行号，这里简单挂在文件开头
-        comments.append({
-            "path": file,
-            "position": 1,
-            "body": f"🤖 文件 {file} 评审:\n{file_review}"
-        })
-
-    if comments:
-        pr.create_review(
-            body="🤖 分文件精确评审结果",
-            event="COMMENT",
-            comments=comments
-        )
-
-    print("✅ 已写回 Conversation 评论和分文件评审")
 
 
 if __name__ == "__main__":

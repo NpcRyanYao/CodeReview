@@ -88,8 +88,10 @@ def git_show_output(output):
 def get_last_commit_info():
     """get the last commit detail"""
     try:
-        commit_hash = run_git_command(["git", "log",
-                            "-1", "--pretty=format:%H"])
+        commit_hash = run_git_command([
+            "git", "log",
+            "-1", "--pretty=format:%H"
+        ])
         if not commit_hash:
             print("❌ git log 返回空，可能仓库为空或命令执行失败")
             return None
