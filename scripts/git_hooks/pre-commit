@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e  # 出错立即退出，阻止提交
+
+# 关键1：找到插件安装后的根目录（通过软链接路径反向推导）
+# 因为用户仓库的.git/hooks/pre-commit是插件的软链接，所以$0是插件的pre-commit路径
+PLUGIN_HOOK_PATH=$(readlink -f "$0")
+PLUGIN_ROOT=$(dirname "$PLUGIN_HOOK_PATH")/../..  # 插件根目录：git-hooks/的上级目录
+PLUGIN_ROOT=$(readlink -f "$PLUGIN_ROOT")  # 绝对路径
+
+# 关键3：调用插件的Python核心逻辑
+echo "🚀 [插件] 执行提交前检查..."
+python3 "$PLUGIN_ROOT/code_review/fast_check.py"
+
+# 传递退出码给Git（0=通过，非0=阻止提交）
+exit $?
