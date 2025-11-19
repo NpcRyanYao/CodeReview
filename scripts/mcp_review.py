@@ -146,6 +146,10 @@ def main():
     comments = []
     for file in changed_files:
         file_diff = diff_map.get(file, "")
+        if not file_diff.strip():
+            # 跳过没有 diff 的文件，避免 422 错误
+            continue
+
         file_ctx = {
             "files": [file],
             "file": file,
