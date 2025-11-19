@@ -123,20 +123,25 @@ def main():
         }]
     }
 
-    print("📦 Context 字典结构:")
+    print("📦 Context Dictionary structure:")
     print(json.dumps(context, indent=2, ensure_ascii=False))
 
     overall = client.query(
         model="code-review-llm",
         context=context,
-        prompt="请检查代码风格、潜在 bug、逻辑问题，并比对需求文档，给出改进建议。必要时引用具体 diff 片段。"
+        prompt=(
+            "Please check the code style, potential bugs, "
+            "logical issues, and compare them with the requirements "
+            "document to provide improvement suggestions. If necessary, "
+            "reference specific diff fragments."
+        )
     )
 
     gh = Github(auth=Auth.Token(os.getenv("GITHUB_TOKEN")))
     repo = gh.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(args.pr))
 
-    pr.create_issue_comment(f"🤖 MCP Review（整体）:\n\n{overall}")
+    pr.create_issue_comment(f"🤖 MCP Review(Overall):\n\n{overall}")
 
     comments = []
     for file in changed_files:
@@ -152,24 +157,26 @@ def main():
         file_review = client.query(
             model="code-review-llm",
             context=file_ctx,
-            prompt=f"请基于该文件的 diff 片段进行精确评审，指出问题和改进建议：{file}"
+            prompt=f"Please conduct a precise review based on the "
+                   f"diff fragment of this file, identify issues, "
+                   f"and provide improvement suggestions：{file}"
         )
 
         position = extract_first_added_line_position(file_diff)
         comments.append({
             "path": file,
             "position": position,
-            "body": f"🤖 文件评审：{file}\n\n{file_review}"
+            "body": f"🤖 Document review：{file}\n\n{file_review}"
         })
 
     if comments:
         pr.create_review(
-            body="🤖 分文件精确评审结果",
+            body="🤖 Accurate evaluation results of documents",
             event="COMMENT",
             comments=comments
         )
 
-    print("✅ 已写回整体评论与分文件评审")
+    print("✅ Written back to overall review and sub file evaluation")
 
 
 if __name__ == "__main__":

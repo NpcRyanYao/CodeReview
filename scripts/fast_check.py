@@ -34,9 +34,15 @@ def check_indentation(code: str):
         if line.startswith(" "):
             spaces = len(line) - len(line.lstrip(" "))
             if spaces % 4 != 0:
-                errors.append(f"Line {i}: 缩进不是 4 的倍数 (当前 {spaces} 空格)")
+                errors.append(
+                    f"Line {i}: Indent is not a multiple "
+                    f"of 4 (current) {spaces} Space)"
+                )
         elif line.startswith("\t"):
-            errors.append(f"Line {i}: 使用了 Tab 缩进，应改为 4 空格")
+            errors.append(
+                f"Line {i}: Tab indentation used, "
+                f"should be changed to 4 spaces"
+            )
     return errors
 
 
@@ -49,7 +55,10 @@ def find_functions(node, code: str):
             # 只要是合法标识符就检查
             if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', func_name):
                 if not re.match(r'^[a-z_][a-z0-9_]*$', func_name):
-                    errors.append(f"函数名'{func_name}' 不符合 snake_case 命名规范")
+                    errors.append(
+                        f"function name'{func_name}' Does not comply with "
+                        f"snake_case naming conventions"
+                    )
     for child in node.children:
         errors.extend(find_functions(child, code))
     return errors
@@ -71,18 +80,18 @@ def run_checks(file_path: str):
     errors.extend(check_function_names(tree, code))
 
     if errors:
-        print("❌ 风格检查发现问题：")
+        print("❌ Style check reveals issues:")
         for e in errors:
             print(" -", e)
         sys.exit(1)
     else:
-        print("✅ 风格检查通过")
+        print("✅ Style check passed")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("用法: python fast_check.py <python_file>")
+        print("Usage: python fast_check.py <python_file>")
         sys.exit(1)
     file_path = sys.argv[1]
-    print(f"开始检查: {file_path}")
+    print(f"Start inspection: {file_path}")
     run_checks(file_path)

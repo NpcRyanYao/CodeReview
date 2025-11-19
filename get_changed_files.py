@@ -93,12 +93,18 @@ def get_last_commit_info():
             "-1", "--pretty=format:%H"
         ])
         if not commit_hash:
-            print("❌ git log 返回空，可能仓库为空或命令执行失败")
+            print(
+                "❌ git log Return empty, possibly due to "
+                "empty warehouse or command execution failure"
+            )
             return None
 
         commit_details = run_git_command(["git", "show", commit_hash])
         if not commit_details:
-            print("❌ git show 返回空，可能包含二进制内容或命令失败")
+            print(
+                "❌ git show Return empty, may contain "
+                "binary content or command failure"
+            )
             return None
 
         commit_info = git_show_output(commit_details)
