@@ -14,13 +14,15 @@
     * 必须以小写字母或下划线开头，后续只能包含小写字母、数字或下划线
     - 如果不符合，就报错：函数名 'xxx' 不符合 snake_case 命名规范
 """
-
+import os.path
 import sys
 import re
 
 from torch.utils.hipify.hipify_python import InputError
 from tree_sitter import Parser
 from tree_sitter_languages import get_language
+
+from diffGet import get_last_commit_info
 
 class FastReview:
     def __init__(self, language: str = "java"):
@@ -75,14 +77,26 @@ class FastReview:
 
         if errors:
             print("❌ Style check reveals issues:")
+            print(file_path)
             for e in errors:
                 print(" -", e)
             sys.exit(1)
         else:
             print("✅ Style check passed")
 
+def main():
+    project_root = sys.argv[1]
+
+    # get diff info
+    info = get_last_commit_info(project_root)
+
+    # fast check for changed files
+    fast_review = FastReview()
+    print(info["message"])
+    for key, value in info["diff"].items():
+        file_path = os.path.join(project_root, key)
+        fast_review.run_checks(file_path)
 
 if __name__ == "__main__":
-    file_path = "client.py"
-    fast_review = FastReview()
-    fast_review.run_checks(file_path)
+    main()
+

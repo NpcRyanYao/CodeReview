@@ -4,14 +4,15 @@ Agent core engine
 LangGraph workflow management
 """
 import asyncio
-from typing import Dict, Any, Optional, Literal
+import os.path
+from typing import Dict, Any, Optional, Literal, List
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from .state import CodeReviewState
-from ..lsp import CodeAnalyzer
-from ..semantic_analyzer import SemanticAnalyzer
+from .lsp import CodeAnalyzer
+from .semantic_analyzer import SemanticAnalyzer
 
 
 class AgentCore:
@@ -87,14 +88,39 @@ class AgentCore:
 
     async def _start(self, state: CodeReviewState) -> CodeReviewState:
         print("start")
-        await asyncio.sleep(3)
         return {}
 
     async def _read_document_content(self, state: CodeReviewState) -> CodeReviewState:
         print("_read_document_content executing")
-        await asyncio.sleep(3)
-        print("_read_document_content finished")
-        return {"is_document_read": True}
+        path = os.path.join(state["project_path"])
+
+        def read_all_files_to_string(folder_path):
+            all_content = []
+
+            for filename in os.listdir(folder_path):
+                file_path = os.path.join(folder_path, filename)
+
+                # 只处理文件，忽略子目录
+                if os.path.isfile(file_path):
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as file:
+                            content = file.read()
+                            all_content.append(f"--- {filename} ---\n{content}\n")
+                    except UnicodeDecodeError:
+                        # 如果UTF-8失败，尝试其他编码或跳过二进制文件
+                        try:
+                            with open(file_path, 'r', encoding='latin-1') as file:
+                                content = file.read()
+                                all_content.append(f"--- {filename} (binary) ---\n{content}\n")
+                        except:
+                            all_content.append(f"--- {filename} (binary file, skipped) ---\n")
+                    except Exception as e:
+                        all_content.append(f"--- {filename} (error: {str(e)}) ---\n")
+
+            return "\n".join(all_content)
+
+        result = read_all_files_to_string(path)
+        return {"is_document_read": True, "document": result}
     
     async def _retrieval_vector_database(self, state: CodeReviewState) -> CodeReviewState:
         print("_retrieval_vector_database executing")
@@ -114,8 +140,8 @@ class AgentCore:
         print("_lsp_diagnostics executing")
 
         # execute lsp diagnose
-        # analyzer = CodeAnalyzer()
-        # diagnostics = await analyzer.analyze(state["project_path"], state["file_paths"])
+        analyzer = CodeAnalyzer()
+        diagnostics = await analyzer.analyze(state["project_path"], state["file_paths"])
 
         print("_lsp_diagnostics finished")
         return {"is_lsp_diagnosed": True}
@@ -164,13 +190,13 @@ class AgentCore:
         else:
             return "display_on_github"
 
-    async def review_code(self, git_diff: str) -> Dict[str, Any]:
+    async def review_code(self, git_diff: str, file_paths: List[str], project_path: str) -> Dict[str, Any]:
         """Execute code review"""
         initial_state: CodeReviewState = {
             "messages": [HumanMessage(content=f"Review this code change: {git_diff[:500]}...")],
             "git_diff": git_diff,
-            "project_path": "F:/python-project/langgraph/src/test_review_code/",
-            "file_paths": None,
+            "project_path": project_path,
+            "file_paths": file_paths,
             "feedback_loop": False,
             "is_document_read": False,
             "is_code_retrieved": False,

@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional, TypedDict, Annotated, Union
 from langchain_core.messages import BaseMessage
-from ..semantic_analyzer import AnalysisResult
+from .semantic_analyzer import AnalysisResult
 import operator
 
 class CodeReviewState(TypedDict, total=False):
