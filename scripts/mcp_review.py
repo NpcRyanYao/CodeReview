@@ -157,9 +157,11 @@ def main():
         file_review = client.query(
             model="code-review-llm",
             context=file_ctx,
-            prompt=f"Please conduct a precise review based on the "
-                   f"diff fragment of this file, identify issues, "
-                   f"and provide improvement suggestions：{file}"
+            prompt=(
+                f"Please conduct a precise review based on the "
+                f"diff fragment of this file, identify issues, "
+                f"and provide improvement suggestions：{file}"
+            )
         )
 
         position = extract_first_added_line_position(file_diff)
