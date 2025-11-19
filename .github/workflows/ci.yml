@@ -27,9 +27,17 @@ jobs:
         # 升级 pip 并按 requirements.txt 安装项目依赖
         # 建议：为加速与减少网络不稳定影响，可使用 pip cache 或 actions/cache 缓存 pip 包
 
-      - name: Run fast_check
+#      - name: Run fast_check
+#        run: |
+#          for f in $(find . -name "*.py"); do
+#            python scripts/fast_check.py "$f"
+#          done
+#        # 遍历仓库中所有 .py 文件并对每个文件调用 scripts/fast_check.py
+
+      - name: Run fast_check on changed files
         run: |
-          for f in $(find . -name "*.py"); do
+          for f in $(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- '*.py'); do
+            echo "Checking $f"
             python scripts/fast_check.py "$f"
           done
-        # 遍历仓库中所有 .py 文件并对每个文件调用 scripts/fast_check.py
+        # 获取本次提交或 PR 改动过的文件列表（只要 .py 文件）
