@@ -75,12 +75,16 @@ def get_commits_in_range(base_sha, head_sha):
     return commits
 
 
-def extract_first_added_line_position(diff_body: str):
-    """解析 diff hunk，返回第一个新增行的 position，默认 1"""
-    m = re.search(r'@@ -\d+(?:,\d+)? \+(\d+)', diff_body)
-    if m:
-        return int(m.group(1))
-    return 1
+def extract_first_added_line_position(diff_body: str) -> int | None:
+    """
+    返回 diff hunk 中第一个新增行的 position（相对位置）。
+    如果没有新增行，返回 None。
+    """
+    lines = diff_body.splitlines()
+    for i, line in enumerate(lines, start=1):
+        if line.startswith("+") and not line.startswith("+++"):
+            return i
+    return None
 
 
 def main():
@@ -147,7 +151,6 @@ def main():
     for file in changed_files:
         file_diff = diff_map.get(file, "")
         if not file_diff.strip():
-            # 跳过没有 diff 的文件，避免 422 错误
             continue
 
         file_ctx = {
@@ -169,11 +172,12 @@ def main():
         )
 
         position = extract_first_added_line_position(file_diff)
-        comments.append({
-            "path": file,
-            "position": position,
-            "body": f"🤖 Document review：{file}\n\n{file_review}"
-        })
+        if position:  # 只有 position 有效时才添加评论
+            comments.append({
+                "path": file,
+                "position": position,
+                "body": f"🤖 Document review：{file}\n\n{file_review}"
+            })
 
     if comments:
         pr.create_review(
@@ -181,8 +185,6 @@ def main():
             event="COMMENT",
             comments=comments
         )
-
-    print("✅ Written back to overall review and sub file evaluation")
 
 
 if __name__ == "__main__":
