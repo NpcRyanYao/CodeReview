@@ -21,7 +21,7 @@ public class DataProcessor {
         for (String data : rawData) {
             // 临时存储拆分后的字段，用于后续年龄校验和排序
             String username = "";
-            int age = 0;
+            int age = 12;
             String city = "";
             // 校验数据格式（必须包含3个字段，年龄为数字）
             String[] parts = data.split(",");
