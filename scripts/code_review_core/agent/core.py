@@ -140,8 +140,8 @@ class AgentCore:
         print("_lsp_diagnostics executing")
 
         # execute lsp diagnose
-        analyzer = CodeAnalyzer()
-        diagnostics = await analyzer.analyze(state["project_path"], state["file_paths"])
+        # analyzer = CodeAnalyzer()
+        # diagnostics = await analyzer.analyze(state["project_path"], state["file_paths"])
 
         print("_lsp_diagnostics finished")
         return {"is_lsp_diagnosed": True}
