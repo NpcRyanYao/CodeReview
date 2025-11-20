@@ -31,6 +31,14 @@ class Client:
 
         # 简单重试配置（应对网络波动）
         self.session = requests.Session()
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=0.5,
+            allowed_methods=["POST"],
+            status_forcelist=[429, 500, 502, 503, 504]
+        )
+        self.session.mount("http://", HTTPAdapter(max_retries=retry_strategy))
+        self.session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
 
     def _add_message(self, role: str, content: str) -> None:
         """添加消息到历史（自动补时间戳）"""
@@ -99,7 +107,7 @@ class Client:
             return reply
 
         except Exception as e:
-            print(f"请求失败：{str(e)}")
+            print(f"waite：{str(e)}")
             return None
 
     def get_history(self, role_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
