@@ -132,8 +132,8 @@ def main():
             "hash": os.getenv("GITHUB_SHA", ""),
             "message": get_commit_message()
         }],
-        "lsp_diagnostics": graph_result["diagnostics"],
-        "related_code": graph_result["semantic_analysis"]
+        # "lsp_diagnostics": graph_result["diagnostics"],
+        # "related_code": graph_result["semantic_analysis"]
     }
 
     overall = client.send(context, format_type="pretty")
