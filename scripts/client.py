@@ -29,17 +29,6 @@ class Client:
         if system_prompt:
             self._add_message("system", system_prompt)
 
-        # 简单重试配置（应对网络波动）
-        self.session = requests.Session()
-        retry_strategy = Retry(
-            total=max_retries,
-            backoff_factor=0.5,
-            allowed_methods=["POST"],
-            status_forcelist=[429, 500, 502, 503, 504]
-        )
-        self.session.mount("http://", HTTPAdapter(max_retries=retry_strategy))
-        self.session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
-
     def _add_message(self, role: str, content: str) -> None:
         """添加消息到历史（自动补时间戳）"""
         self.conversation_history.append({

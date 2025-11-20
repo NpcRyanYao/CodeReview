@@ -145,7 +145,7 @@ def main():
     pr.create_issue_comment(f"🤖 MCP Review(Overall):\n\n{overall}")
 
     comments = []
-    client.send("Now conduct a specific review of the documents I have provided")
+    client.send("Next, I will give you specified file diff, give you specified view.")
     for file in changed_files:
         file_diff = diff_map.get(file, "")
         file_ctx = {
