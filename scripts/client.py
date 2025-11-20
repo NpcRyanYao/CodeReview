@@ -13,7 +13,7 @@ class Client:
             self,
             api_base_url: str,
             api_key: str,
-            model_name: str = "default-model",
+            model_name: str = "deepseek-chat",
             system_prompt: Optional[str] = None,
             timeout: int = 30,
             max_retries: int = 3
@@ -159,6 +159,7 @@ if __name__ == "__main__":
     }
     reply2 = client.send(order_dict, format_type="pretty")
     print(f"助手回复：{reply2}\n")
+    reply3 = client.send("把刚才说的再说一遍")
 
     # 3. 查看对话历史
     client.print_history(role_filter=["user", "assistant"])

@@ -108,13 +108,3 @@ def get_all_commit_info(project_path):
     except subprocess.CalledProcessError as e:
         print("❌ excute Git fail:", e)
         return None
-
-def main():
-    project_root = sys.argv[1]
-
-    info = get_last_commit_info(project_root)
-    for key, value in info.items():
-        print(f"{key}:\n{value}")
-
-if __name__ == "__main__":
-    main()

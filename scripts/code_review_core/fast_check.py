@@ -97,6 +97,3 @@ def main():
         file_path = os.path.join(project_root, key)
         fast_review.run_checks(file_path)
 
-if __name__ == "__main__":
-    main()
-

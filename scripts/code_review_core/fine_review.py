@@ -2,8 +2,17 @@ import asyncio
 import os
 import sys
 
-from agent import AgentCore
-from diffGet import get_all_commit_info, run_git_command, get_last_commit_info
+# Handle imports for both module import and direct script execution
+try:
+    # Try relative imports first (when imported as module)
+    from .agent import AgentCore
+    from .diffGet import get_all_commit_info, run_git_command, get_last_commit_info
+except ImportError:
+    # If relative imports fail, add paths and use absolute imports (when run as script)
+    scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, scripts_dir)
+    from code_review_core.agent import AgentCore
+    from code_review_core.diffGet import get_all_commit_info, run_git_command, get_last_commit_info
 
 
 def get_project_root():

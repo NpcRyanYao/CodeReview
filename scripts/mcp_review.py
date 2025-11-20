@@ -10,10 +10,12 @@ import asyncio
 import sys
 import os
 
-from scripts.code_review_core import fine_code_review
+# 把项目根目录加入 sys.path (必须在导入之前)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 把 scripts 目录加入 sys.path 以便导入 code_review_core
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# 把项目根目录加入 sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from code_review_core import fine_code_review
 import argparse
 import re
 import json
@@ -94,7 +96,7 @@ def main():
     parser.add_argument("--diff-file", required=True)
     parser.add_argument("--req", required=False)
     parser.add_argument("--pr", required=True)
-    parser.add_argument("--base-sha", required=False)  # 新增：传入 base commit
+    parser.add_argument("--base-sha", required=False)
     args = parser.parse_args()
 
     graph_result = asyncio.run(fine_code_review())
@@ -108,7 +110,7 @@ def main():
         api_base_url="https://api.deepseek.com",
         api_key="sk-413bc9536ec04094a4a05e0e1d17bc3b",
         model_name="deepseek-chat",
-        system_prompt="You are a code review expert, and now we need you to provide the review content based on the context dictionary. Please provide the overall review first."
+        system_prompt="You are a code review expert, and now we need you to provide the review content based on the context dictionary. Please provide the overall review first. You need to use English."
     )
     changed_files = args.files.split()
     diff_map = parse_diff_by_file(full_diff)
