@@ -29,6 +29,9 @@ class Client:
         if system_prompt:
             self._add_message("system", system_prompt)
 
+        # 简单重试配置（应对网络波动）
+        self.session = requests.Session()
+
     def _add_message(self, role: str, content: str) -> None:
         """添加消息到历史（自动补时间戳）"""
         self.conversation_history.append({
